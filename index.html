@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>損益分岐点シミュレーター</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.development.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.development.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f3f4f6; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+    h1 { text-align: center; color: #1f2937; margin-bottom: 24px; font-size: 24px; }
+    .grid { display: grid; grid-template-columns: 1fr 2fr; gap: 24px; }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: white; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .card-title { font-size: 18px; font-weight: 600; color: #1f2937; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid #e5e7eb; }
+    .slider-group { margin-bottom: 24px; }
+    .slider-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .slider-label { font-weight: 500; color: #374151; }
+    .slider-value { font-size: 18px; font-weight: 700; }
+    .slider-value.blue { color: #2563eb; }
+    .slider-value.green { color: #059669; }
+    .slider-value.orange { color: #ea580c; }
+    input[type="range"] { width: 100%; height: 8px; border-radius: 4px; background: #e5e7eb; outline: none; -webkit-appearance: none; }
+    input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%; background: #3b82f6; cursor: pointer; }
+    .slider-range { display: flex; justify-content: space-between; font-size: 12px; color: #6b7280; margin-top: 4px; }
+    .info-box { margin-top: 16px; padding: 12px; background: #f9fafb; border-radius: 8px; font-size: 14px; color: #4b5563; }
+    .chart-container { width: 100%; height: 350px; }
+    .results-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 24px; }
+    @media (max-width: 700px) { .results-grid { grid-template-columns: repeat(2, 1fr); } }
+    .result-card { background: white; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid #e5e7eb; }
+    .result-label { font-size: 14px; color: #6b7280; margin-bottom: 4px; }
+    .result-value { font-size: 20px; font-weight: 700; color: #1f2937; }
+    .result-value.profit { color: #16a34a; }
+    .result-value.loss { color: #dc2626; }
+    .result-sub { font-size: 12px; color: #9ca3af; margin-top: 4px; }
+    .help-box { margin-top: 24px; padding: 16px; background: #eff6ff; border-radius: 12px; font-size: 14px; color: #1e40af; }
+    svg text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  
+  <script type="text/babel">
+    const { useState, useMemo } = React;
+
+    function Chart({ data, breakEvenX, maxX, maxY }) {
+      const width = 700;
+      const height = 300;
+      const padding = { top: 30, right: 30, bottom: 50, left: 70 };
+      const chartWidth = width - padding.left - padding.right;
+      const chartHeight = height - padding.top - padding.bottom;
+
+      const scaleX = (v) => padding.left + (v / maxX) * chartWidth;
+      const scaleY = (v) => padding.top + chartHeight - (v / maxY) * chartHeight;
+
+      const salesLine = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${scaleX(d.sales)} ${scaleY(d.salesLine)}`).join(' ');
+      const totalCostLine = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${scaleX(d.sales)} ${scaleY(d.totalCost)}`).join(' ');
+      const fixedCostLine = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${scaleX(d.sales)} ${scaleY(d.fixedCost)}`).join(' ');
+
+      const xTicks = [];
+      const xStep = Math.ceil(maxX / 5 / 50) * 50;
+      for (let i = 0; i <= maxX; i += xStep) xTicks.push(i);
+
+      const yTicks = [];
+      const yStep = Math.ceil(maxY / 5 / 50) * 50;
+      for (let i = 0; i <= maxY; i += yStep) yTicks.push(i);
+
+      return (
+        <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: '100%' }}>
+          {xTicks.map(v => (
+            <line key={`xg${v}`} x1={scaleX(v)} y1={padding.top} x2={scaleX(v)} y2={padding.top + chartHeight} stroke="#e5e7eb" strokeDasharray="3,3" />
+          ))}
+          {yTicks.map(v => (
+            <line key={`yg${v}`} x1={padding.left} y1={scaleY(v)} x2={padding.left + chartWidth} y2={scaleY(v)} stroke="#e5e7eb" strokeDasharray="3,3" />
+          ))}
+
+          <line x1={padding.left} y1={padding.top + chartHeight} x2={padding.left + chartWidth} y2={padding.top + chartHeight} stroke="#9ca3af" />
+          <line x1={padding.left} y1={padding.top} x2={padding.left} y2={padding.top + chartHeight} stroke="#9ca3af" />
+
+          {xTicks.map(v => (
+            <text key={`xl${v}`} x={scaleX(v)} y={padding.top + chartHeight + 20} textAnchor="middle" fontSize="12" fill="#6b7280">{v}</text>
+          ))}
+          {yTicks.map(v => (
+            <text key={`yl${v}`} x={padding.left - 10} y={scaleY(v) + 4} textAnchor="end" fontSize="12" fill="#6b7280">{v}</text>
+          ))}
+
+          <text x={padding.left + chartWidth / 2} y={height - 5} textAnchor="middle" fontSize="13" fill="#374151">売上高（百万円）</text>
+          <text x={15} y={padding.top + chartHeight / 2} textAnchor="middle" fontSize="13" fill="#374151" transform={`rotate(-90, 15, ${padding.top + chartHeight / 2})`}>金額（百万円）</text>
+
+          {breakEvenX > 0 && breakEvenX <= maxX && (
+            <>
+              <line x1={scaleX(breakEvenX)} y1={padding.top} x2={scaleX(breakEvenX)} y2={padding.top + chartHeight} stroke="#10b981" strokeWidth="2" strokeDasharray="5,5" />
+              <text x={scaleX(breakEvenX)} y={padding.top - 8} textAnchor="middle" fontSize="12" fill="#10b981" fontWeight="600">BEP: {Math.round(breakEvenX)}百万円</text>
+            </>
+          )}
+
+          <path d={fixedCostLine} fill="none" stroke="#f97316" strokeWidth="2" strokeDasharray="5,5" />
+          <path d={totalCostLine} fill="none" stroke="#ef4444" strokeWidth="3" />
+          <path d={salesLine} fill="none" stroke="#3b82f6" strokeWidth="3" />
+
+          <g transform={`translate(${padding.left + 20}, ${padding.top + 10})`}>
+            <line x1="0" y1="0" x2="25" y2="0" stroke="#3b82f6" strokeWidth="3" />
+            <text x="30" y="4" fontSize="12" fill="#374151">売上高</text>
+            <line x1="80" y1="0" x2="105" y2="0" stroke="#ef4444" strokeWidth="3" />
+            <text x="110" y="4" fontSize="12" fill="#374151">総費用</text>
+            <line x1="160" y1="0" x2="185" y2="0" stroke="#f97316" strokeWidth="2" strokeDasharray="5,5" />
+            <text x="190" y="4" fontSize="12" fill="#374151">固定費</text>
+          </g>
+        </svg>
+      );
+    }
+
+    function BreakEvenSimulator() {
+      const [sales, setSales] = useState(100);
+      const [marginRate, setMarginRate] = useState(40);
+      const [fixedCost, setFixedCost] = useState(30);
+
+      const salesValue = sales * 1000000;
+      const marginRateValue = marginRate / 100;
+      const fixedCostValue = fixedCost * 1000000;
+
+      const calculations = useMemo(() => {
+        const marginalProfit = salesValue * marginRateValue;
+        const variableCost = salesValue * (1 - marginRateValue);
+        const operatingProfit = marginalProfit - fixedCostValue;
+        const breakEvenSales = marginRateValue > 0 ? fixedCostValue / marginRateValue : 0;
+        const safetyMargin = salesValue > 0 ? ((salesValue - breakEvenSales) / salesValue) * 100 : 0;
+        
+        return { marginalProfit, variableCost, operatingProfit, breakEvenSales, safetyMargin };
+      }, [salesValue, marginRateValue, fixedCostValue]);
+
+      const { chartData, maxX, maxY } = useMemo(() => {
+        const maxSales = Math.max(sales * 1.5, calculations.breakEvenSales / 1000000 * 1.3, 100);
+        const data = [];
+        for (let i = 0; i <= 20; i++) {
+          const s = (maxSales / 20) * i;
+          data.push({
+            sales: s,
+            salesLine: s,
+            totalCost: fixedCost + s * (1 - marginRateValue),
+            fixedCost: fixedCost
+          });
+        }
+        const maxY = Math.max(...data.map(d => Math.max(d.salesLine, d.totalCost))) * 1.1;
+        return { chartData: data, maxX: maxSales, maxY };
+      }, [sales, marginRateValue, fixedCost, calculations.breakEvenSales]);
+
+      const formatNumber = (num) => new Intl.NumberFormat('ja-JP').format(Math.round(num));
+
+      const formatYen = (num) => {
+        if (num >= 100000000) return `${(num / 100000000).toFixed(2)}億円`;
+        if (num >= 10000) return `${(num / 10000).toFixed(0)}万円`;
+        return `${formatNumber(num)}円`;
+      };
+
+      return (
+        <div className="container">
+          <h1>損益分岐点シミュレーター</h1>
+          
+          <div className="grid">
+            <div className="card">
+              <div className="card-title">パラメータ設定</div>
+              
+              <div className="slider-group">
+                <div className="slider-header">
+                  <span className="slider-label">売上高</span>
+                  <span className="slider-value blue">{formatNumber(sales)}百万円</span>
+                </div>
+                <input type="range" min="10" max="500" step="5" value={sales} onChange={(e) => setSales(Number(e.target.value))} />
+                <div className="slider-range"><span>10百万円</span><span>500百万円</span></div>
+              </div>
+              
+              <div className="slider-group">
+                <div className="slider-header">
+                  <span className="slider-label">限界利益率</span>
+                  <span className="slider-value green">{marginRate}%</span>
+                </div>
+                <input type="range" min="5" max="80" step="1" value={marginRate} onChange={(e) => setMarginRate(Number(e.target.value))} />
+                <div className="slider-range"><span>5%</span><span>80%</span></div>
+              </div>
+              
+              <div className="slider-group">
+                <div className="slider-header">
+                  <span className="slider-label">固定費</span>
+                  <span className="slider-value orange">{formatNumber(fixedCost)}百万円</span>
+                </div>
+                <input type="range" min="5" max="200" step="1" value={fixedCost} onChange={(e) => setFixedCost(Number(e.target.value))} />
+                <div className="slider-range"><span>5百万円</span><span>200百万円</span></div>
+              </div>
+
+              <div className="info-box">
+                <div>変動費率: {(100 - marginRate)}%</div>
+                <div>変動費: {formatYen(calculations.variableCost)}</div>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-title">損益分岐点グラフ</div>
+              <div className="chart-container">
+                <Chart 
+                  data={chartData} 
+                  breakEvenX={calculations.breakEvenSales / 1000000} 
+                  maxX={maxX}
+                  maxY={maxY}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="results-grid">
+            <div className="result-card">
+              <div className="result-label">損益分岐点売上高</div>
+              <div className="result-value">{formatYen(calculations.breakEvenSales)}</div>
+            </div>
+            <div className="result-card">
+              <div className="result-label">限界利益</div>
+              <div className="result-value">{formatYen(calculations.marginalProfit)}</div>
+            </div>
+            <div className="result-card">
+              <div className="result-label">営業利益</div>
+              <div className={`result-value ${calculations.operatingProfit >= 0 ? 'profit' : 'loss'}`}>
+                {formatYen(calculations.operatingProfit)}
+              </div>
+            </div>
+            <div className="result-card">
+              <div className="result-label">安全余裕率</div>
+              <div className={`result-value ${calculations.safetyMargin >= 0 ? 'profit' : 'loss'}`}>
+                {calculations.safetyMargin.toFixed(1)}%
+              </div>
+              <div className="result-sub">{calculations.safetyMargin >= 0 ? '黒字余裕あり' : '損益分岐点以下'}</div>
+            </div>
+          </div>
+
+          <div className="help-box">
+            <strong>使い方:</strong> スライダーを動かして売上高・限界利益率・固定費を変更すると、リアルタイムでグラフと計算結果が更新されます。緑の点線が損益分岐点（BEP）を示しています。
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<BreakEvenSimulator />);
+  </script>
+</body>
+</html>
