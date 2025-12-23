@@ -37,6 +37,10 @@
     .result-value.loss { color: #dc2626; }
     .result-sub { font-size: 12px; color: #9ca3af; margin-top: 4px; }
     .help-box { margin-top: 24px; padding: 16px; background: #eff6ff; border-radius: 12px; font-size: 14px; color: #1e40af; }
+    .unit-toggle { display: flex; gap: 8px; margin-bottom: 20px; padding: 4px; background: #f3f4f6; border-radius: 8px; }
+    .unit-toggle button { flex: 1; padding: 8px 16px; border: none; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s; background: transparent; color: #6b7280; }
+    .unit-toggle button.active { background: white; color: #2563eb; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .unit-toggle button:hover:not(.active) { color: #374151; }
     svg text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
   </style>
 </head>
@@ -46,7 +50,7 @@
   <script type="text/babel">
     const { useState, useMemo } = React;
 
-    function Chart({ data, breakEvenX, maxX, maxY }) {
+    function Chart({ data, breakEvenX, maxX, maxY, unitLabel }) {
       const width = 700;
       const height = 300;
       const padding = { top: 30, right: 30, bottom: 50, left: 70 };
@@ -87,13 +91,13 @@
             <text key={`yl${v}`} x={padding.left - 10} y={scaleY(v) + 4} textAnchor="end" fontSize="12" fill="#6b7280">{v}</text>
           ))}
 
-          <text x={padding.left + chartWidth / 2} y={height - 5} textAnchor="middle" fontSize="13" fill="#374151">売上高（百万円）</text>
-          <text x={15} y={padding.top + chartHeight / 2} textAnchor="middle" fontSize="13" fill="#374151" transform={`rotate(-90, 15, ${padding.top + chartHeight / 2})`}>金額（百万円）</text>
+          <text x={padding.left + chartWidth / 2} y={height - 5} textAnchor="middle" fontSize="13" fill="#374151">売上高（{unitLabel}）</text>
+          <text x={15} y={padding.top + chartHeight / 2} textAnchor="middle" fontSize="13" fill="#374151" transform={`rotate(-90, 15, ${padding.top + chartHeight / 2})`}>金額（{unitLabel}）</text>
 
           {breakEvenX > 0 && breakEvenX <= maxX && (
             <>
               <line x1={scaleX(breakEvenX)} y1={padding.top} x2={scaleX(breakEvenX)} y2={padding.top + chartHeight} stroke="#10b981" strokeWidth="2" strokeDasharray="5,5" />
-              <text x={scaleX(breakEvenX)} y={padding.top - 8} textAnchor="middle" fontSize="12" fill="#10b981" fontWeight="600">BEP: {Math.round(breakEvenX)}百万円</text>
+              <text x={scaleX(breakEvenX)} y={padding.top - 8} textAnchor="middle" fontSize="12" fill="#10b981" fontWeight="600">BEP: {breakEvenX.toFixed(unitLabel === '億円' ? 2 : 0)}{unitLabel}</text>
             </>
           )}
 
@@ -114,13 +118,29 @@
     }
 
     function BreakEvenSimulator() {
+      const [unit, setUnit] = useState('million'); // 'million' or 'okuyen'
       const [sales, setSales] = useState(100);
       const [marginRate, setMarginRate] = useState(40);
       const [fixedCost, setFixedCost] = useState(30);
 
-      const salesValue = sales * 1000000;
+      const unitMultiplier = unit === 'million' ? 1000000 : 100000000;
+      const unitLabel = unit === 'million' ? '百万円' : '億円';
+
+      const sliderConfig = unit === 'million'
+        ? { sales: { min: 10, max: 500, step: 5 }, fixedCost: { min: 5, max: 200, step: 1 } }
+        : { sales: { min: 0.1, max: 5, step: 0.05 }, fixedCost: { min: 0.05, max: 2, step: 0.01 } };
+
+      const handleUnitChange = (newUnit) => {
+        if (newUnit === unit) return;
+        const conversionFactor = newUnit === 'million' ? 100 : 0.01;
+        setSales(Number((sales * conversionFactor).toFixed(2)));
+        setFixedCost(Number((fixedCost * conversionFactor).toFixed(2)));
+        setUnit(newUnit);
+      };
+
+      const salesValue = sales * unitMultiplier;
       const marginRateValue = marginRate / 100;
-      const fixedCostValue = fixedCost * 1000000;
+      const fixedCostValue = fixedCost * unitMultiplier;
 
       const calculations = useMemo(() => {
         const marginalProfit = salesValue * marginRateValue;
@@ -133,7 +153,8 @@
       }, [salesValue, marginRateValue, fixedCostValue]);
 
       const { chartData, maxX, maxY } = useMemo(() => {
-        const maxSales = Math.max(sales * 1.5, calculations.breakEvenSales / 1000000 * 1.3, 100);
+        const breakEvenInUnits = calculations.breakEvenSales / unitMultiplier;
+        const maxSales = Math.max(sales * 1.5, breakEvenInUnits * 1.3, unit === 'million' ? 100 : 1);
         const data = [];
         for (let i = 0; i <= 20; i++) {
           const s = (maxSales / 20) * i;
@@ -146,7 +167,7 @@
         }
         const maxY = Math.max(...data.map(d => Math.max(d.salesLine, d.totalCost))) * 1.1;
         return { chartData: data, maxX: maxSales, maxY };
-      }, [sales, marginRateValue, fixedCost, calculations.breakEvenSales]);
+      }, [sales, marginRateValue, fixedCost, calculations.breakEvenSales, unit, unitMultiplier]);
 
       const formatNumber = (num) => new Intl.NumberFormat('ja-JP').format(Math.round(num));
 
@@ -167,14 +188,39 @@
           <div className="grid">
             <div className="card">
               <div className="card-title">パラメータ設定</div>
-              
+
+              <div className="unit-toggle">
+                <button
+                  className={unit === 'million' ? 'active' : ''}
+                  onClick={() => handleUnitChange('million')}
+                >
+                  百万円
+                </button>
+                <button
+                  className={unit === 'okuyen' ? 'active' : ''}
+                  onClick={() => handleUnitChange('okuyen')}
+                >
+                  億円
+                </button>
+              </div>
+
               <div className="slider-group">
                 <div className="slider-header">
                   <span className="slider-label">売上高</span>
-                  <span className="slider-value blue">{formatNumber(sales)}百万円</span>
+                  <span className="slider-value blue">{sales.toFixed(unit === 'million' ? 0 : 2)}{unitLabel}</span>
                 </div>
-                <input type="range" min="10" max="500" step="5" value={sales} onChange={(e) => setSales(Number(e.target.value))} />
-                <div className="slider-range"><span>10百万円</span><span>500百万円</span></div>
+                <input
+                  type="range"
+                  min={sliderConfig.sales.min}
+                  max={sliderConfig.sales.max}
+                  step={sliderConfig.sales.step}
+                  value={sales}
+                  onChange={(e) => setSales(Number(e.target.value))}
+                />
+                <div className="slider-range">
+                  <span>{sliderConfig.sales.min}{unitLabel}</span>
+                  <span>{sliderConfig.sales.max}{unitLabel}</span>
+                </div>
               </div>
               
               <div className="slider-group">
@@ -189,10 +235,20 @@
               <div className="slider-group">
                 <div className="slider-header">
                   <span className="slider-label">固定費</span>
-                  <span className="slider-value orange">{formatNumber(fixedCost)}百万円</span>
+                  <span className="slider-value orange">{fixedCost.toFixed(unit === 'million' ? 0 : 2)}{unitLabel}</span>
                 </div>
-                <input type="range" min="5" max="200" step="1" value={fixedCost} onChange={(e) => setFixedCost(Number(e.target.value))} />
-                <div className="slider-range"><span>5百万円</span><span>200百万円</span></div>
+                <input
+                  type="range"
+                  min={sliderConfig.fixedCost.min}
+                  max={sliderConfig.fixedCost.max}
+                  step={sliderConfig.fixedCost.step}
+                  value={fixedCost}
+                  onChange={(e) => setFixedCost(Number(e.target.value))}
+                />
+                <div className="slider-range">
+                  <span>{sliderConfig.fixedCost.min}{unitLabel}</span>
+                  <span>{sliderConfig.fixedCost.max}{unitLabel}</span>
+                </div>
               </div>
 
               <div className="info-box">
@@ -204,11 +260,12 @@
             <div className="card">
               <div className="card-title">損益分岐点グラフ</div>
               <div className="chart-container">
-                <Chart 
-                  data={chartData} 
-                  breakEvenX={calculations.breakEvenSales / 1000000} 
+                <Chart
+                  data={chartData}
+                  breakEvenX={calculations.breakEvenSales / unitMultiplier}
                   maxX={maxX}
                   maxY={maxY}
+                  unitLabel={unitLabel}
                 />
               </div>
             </div>
