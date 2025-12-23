@@ -128,13 +128,20 @@
 
       const sliderConfig = unit === 'million'
         ? { sales: { min: 10, max: 500, step: 5 }, fixedCost: { min: 5, max: 200, step: 1 } }
-        : { sales: { min: 0.1, max: 5, step: 0.05 }, fixedCost: { min: 0.05, max: 2, step: 0.01 } };
+        : { sales: { min: 1, max: 50, step: 0.5 }, fixedCost: { min: 0.05, max: 2, step: 0.01 } };
 
       const handleUnitChange = (newUnit) => {
         if (newUnit === unit) return;
         const conversionFactor = newUnit === 'million' ? 100 : 0.01;
-        setSales(Number((sales * conversionFactor).toFixed(2)));
-        setFixedCost(Number((fixedCost * conversionFactor).toFixed(2)));
+        const newConfig = newUnit === 'million'
+          ? { sales: { min: 10, max: 500, step: 5 }, fixedCost: { min: 5, max: 200, step: 1 } }
+          : { sales: { min: 1, max: 50, step: 0.5 }, fixedCost: { min: 0.05, max: 2, step: 0.01 } };
+
+        const newSales = Number((sales * conversionFactor).toFixed(2));
+        const newFixedCost = Number((fixedCost * conversionFactor).toFixed(2));
+
+        setSales(Math.max(newConfig.sales.min, Math.min(newConfig.sales.max, newSales)));
+        setFixedCost(Math.max(newConfig.fixedCost.min, Math.min(newConfig.fixedCost.max, newFixedCost)));
         setUnit(newUnit);
       };
 
