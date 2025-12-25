@@ -235,7 +235,7 @@
                   <span className="slider-label">限界利益率</span>
                   <span className="slider-value green">{marginRate}%</span>
                 </div>
-                <input type="range" min="5" max="80" step="1" value={marginRate} onChange={(e) => setMarginRate(Number(e.target.value))} />
+                <input type="range" min="5" max="80" step="0.5" value={marginRate} onChange={(e) => setMarginRate(Number(e.target.value))} />
                 <div className="slider-range"><span>5%</span><span>80%</span></div>
               </div>
               
