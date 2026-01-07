@@ -159,21 +159,51 @@
         return { marginalProfit, variableCost, operatingProfit, breakEvenSales, safetyMargin };
       }, [salesValue, marginRateValue, fixedCostValue]);
 
-      const { chartData, maxX, maxY } = useMemo(() => {
-        const breakEvenInUnits = calculations.breakEvenSales / unitMultiplier;
-        const maxSales = Math.max(sales * 1.5, breakEvenInUnits * 1.3, unit === 'million' ? 100 : 1);
+      // Helper function to calculate the maximum sales value for chart display
+      const calculateMaxSales = (currentSales, breakEvenInUnits, unit) => {
+        const minChartRange = unit === 'million' ? 100 : 1;
+        return Math.max(
+          currentSales * 1.5,
+          breakEvenInUnits * 1.3,
+          minChartRange
+        );
+      };
+
+      // Helper function to generate data points for the chart
+      const generateChartDataPoints = (maxSales, fixedCost, variableCostRate, numPoints = 20) => {
         const data = [];
-        for (let i = 0; i <= 20; i++) {
-          const s = (maxSales / 20) * i;
+        const increment = maxSales / numPoints;
+
+        for (let i = 0; i <= numPoints; i++) {
+          const salesValue = increment * i;
           data.push({
-            sales: s,
-            salesLine: s,
-            totalCost: fixedCost + s * (1 - marginRateValue),
+            sales: salesValue,
+            salesLine: salesValue,
+            totalCost: fixedCost + salesValue * variableCostRate,
             fixedCost: fixedCost
           });
         }
-        const maxY = Math.max(...data.map(d => Math.max(d.salesLine, d.totalCost))) * 1.1;
-        return { chartData: data, maxX: maxSales, maxY };
+
+        return data;
+      };
+
+      // Helper function to calculate the maximum Y value with padding
+      const calculateMaxY = (dataPoints, paddingFactor = 1.1) => {
+        const maxValue = Math.max(
+          ...dataPoints.map(d => Math.max(d.salesLine, d.totalCost))
+        );
+        return maxValue * paddingFactor;
+      };
+
+      const { chartData, maxX, maxY } = useMemo(() => {
+        const breakEvenInUnits = calculations.breakEvenSales / unitMultiplier;
+        const maxSales = calculateMaxSales(sales, breakEvenInUnits, unit);
+        const variableCostRate = 1 - marginRateValue;
+
+        const data = generateChartDataPoints(maxSales, fixedCost, variableCostRate);
+        const maxYValue = calculateMaxY(data);
+
+        return { chartData: data, maxX: maxSales, maxY: maxYValue };
       }, [sales, marginRateValue, fixedCost, calculations.breakEvenSales, unit, unitMultiplier]);
 
       const formatNumber = (num) => new Intl.NumberFormat('ja-JP').format(Math.round(num));
